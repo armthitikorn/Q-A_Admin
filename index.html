@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>หัวหน้า - แบบทดสอบ ถูก/ผิด</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;700&display=swap');
+:root{--acc:#d9534f;--ok:#2e8b57;--line:#ddd;--mute:#777}
+*{box-sizing:border-box}
+body{font-family:'Sarabun',sans-serif;margin:0;padding:16px;background:#f4f7f6;color:#222}
+.wrap{max-width:900px;margin:0 auto}
+h1{font-size:24px;color:var(--acc);margin:6px 0 12px}
+button,select,input,textarea{font:inherit}
+button{padding:9px 16px;border:1px solid var(--line);background:#fff;border-radius:8px;cursor:pointer}
+button.pri{background:#5cb85c;border-color:#5cb85c;color:#fff;font-weight:700}
+button.del{color:var(--acc)}
+select,input[type=text],input[type=password]{padding:9px;border:1px solid var(--line);border-radius:6px;background:#fff}
+textarea{width:100%;border:1px solid var(--line);border-radius:8px;padding:10px;resize:vertical}
+.top{display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:space-between}
+.tabs{display:flex;gap:8px;margin:10px 0}
+.tabs button.on{background:var(--acc);border-color:var(--acc);color:#fff;font-weight:700}
+.bar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.bar input[type=text]{flex:1;min-width:180px}
+.card{background:#fff;border-radius:10px;box-shadow:0 2px 10px rgba(0,0,0,.07);padding:14px;margin-bottom:12px}
+.card.off{opacity:.6}
+.qh{display:flex;justify-content:space-between;margin-bottom:8px;font-weight:700}
+.row{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-top:8px}
+.row .sp{flex:1}
+.mute{color:var(--mute);font-size:14px}
+details{background:#fff;border-radius:10px;box-shadow:0 2px 10px rgba(0,0,0,.07);margin-bottom:10px;padding:0 16px}
+summary{cursor:pointer;padding:14px 0;list-style:none}
+.item{border-top:1px solid #eee;padding:10px 0;font-size:15px}
+.ok{color:var(--ok);font-weight:700}.bad{color:var(--acc);font-weight:700}
+.warn{background:#fdecea;color:#b02a25;border-radius:6px;padding:2px 8px;font-size:13px;font-weight:700}
+.msg{text-align:center;color:#888;padding:26px 0}
+.err{color:var(--acc)}
+.login{max-width:360px;margin:12vh auto;background:#fff;border-radius:10px;padding:20px;display:grid;gap:10px;box-shadow:0 2px 10px rgba(0,0,0,.07)}
+.login h1{margin:0;font-size:22px}
+#toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:#222;color:#fff;padding:10px 16px;border-radius:8px;display:none;max-width:90%}
+#toast.e{background:var(--acc)}
+.hide{display:none}
+</style>
+</head>
+<body>
+
+<div id="loginView" class="login">
+  <h1>เข้าสู่ระบบหัวหน้า</h1>
+  <input type="text" id="em" placeholder="อีเมล" autocomplete="username">
+  <input type="password" id="pw" placeholder="รหัสผ่าน" autocomplete="current-password">
+  <div id="loginErr" class="err"></div>
+  <button class="pri" id="loginBtn">เข้าสู่ระบบ</button>
+</div>
+
+<div id="appView" class="wrap hide">
+  <div class="top"><h1>จัดการแบบทดสอบ ถูก/ผิด</h1><button id="outBtn">ออกจากระบบ</button></div>
+  <div class="tabs">
+    <button id="tabQ" class="on">โจทย์</button>
+    <button id="tabR">ผลรายคน</button>
+  </div>
+
+  <div id="paneQ">
+    <div class="bar">
+      <select id="qTeam">
+        <option value="all">ทุกทีม (ใช้กับทั้งสองทีม)</option>
+        <option value="tele">เฉพาะทีมเทเล</option>
+        <option value="agent">เฉพาะทีมเอเจน</option>
+      </select>
+      <button class="pri" id="addBtn">เพิ่มโจทย์</button>
+    </div>
+    <div id="qList"></div>
+  </div>
+
+  <div id="paneR" class="hide">
+    <div class="bar">
+      <input type="text" id="search" placeholder="ค้นหาชื่อหรือสังกัด">
+      <select id="rTeam"><option value="">ทุกทีม</option><option value="tele">ทีมเทเล</option><option value="agent">ทีมเอเจน</option></select>
+      <button id="reloadBtn">รีเฟรช</button>
+      <button id="weakBtn">ข้อที่ตอบผิดบ่อย</button>
+    </div>
+    <div id="weak" class="card hide"></div>
+    <div class="mute" id="count" style="margin-bottom:8px"></div>
+    <div id="rList"></div>
+  </div>
+</div>
+<div id="toast" role="status"></div>
+
+<script type="module">
+import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+
+const sb = createClient(
+  'https://wzwyotzzxycqfwercakh.supabase.co',
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind6d3lvdHp6eHljcWZ3ZXJjYWtoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTcwNTg3MTMsImV4cCI6MjA3MjYzNDcxM30.lgiAf9oBUqsaWGb3u_80wuoKAODQHE_lIBxpGumhrno'
+);
+
+const $ = id => document.getElementById(id);
+const el = (t, text, cls) => { const e = document.createElement(t); if (text !== undefined) e.textContent = text; if (cls) e.className = cls; return e; };
+const TEAM = { all: 'ทุกทีม', tele: 'ทีมเทเล', agent: 'ทีมเอเจน' };
+const fmt = d => new Date(d).toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' });
+function toast(m, err) { const t = $('toast'); t.textContent = m; t.className = err ? 'e' : ''; t.style.display = 'block'; clearTimeout(toast.h); toast.h = setTimeout(() => t.style.display = 'none', 3200); }
+
+// ---------- ล็อกอิน / แท็บ ----------
+const gate = on => {
+  $('loginView').classList.toggle('hide', on);
+  $('appView').classList.toggle('hide', !on);
+  if (on) { loadQ(); }
+};
+$('loginBtn').onclick = async () => {
+  $('loginErr').textContent = '';
+  const { error } = await sb.auth.signInWithPassword({ email: $('em').value.trim(), password: $('pw').value });
+  if (error) return $('loginErr').textContent = 'เข้าสู่ระบบไม่สำเร็จ: ตรวจสอบอีเมลและรหัสผ่าน';
+  gate(true);
+};
+$('outBtn').onclick = async () => { await sb.auth.signOut(); gate(false); };
+sb.auth.getSession().then(({ data }) => gate(!!data.session)).catch(() => gate(false));
+
+const tab = q => {
+  $('paneQ').classList.toggle('hide', !q); $('paneR').classList.toggle('hide', q);
+  $('tabQ').classList.toggle('on', q); $('tabR').classList.toggle('on', !q);
+  if (!q) loadR();
+};
+$('tabQ').onclick = () => tab(true);
+$('tabR').onclick = () => tab(false);
+
+// ---------- โจทย์ ----------
+let qRows = [], uid = 0;
+$('qTeam').onchange = loadQ;
+
+async function loadQ() {
+  const { data, error } = await sb.from('wc_questions').select('*').eq('team', $('qTeam').value).order('position');
+  if (error) return toast('โหลดโจทย์ไม่สำเร็จ: ' + error.message, true);
+  qRows = data; renderQ();
+}
+function renderQ() {
+  const box = $('qList'); box.innerHTML = '';
+  if (!qRows.length) box.append(el('div', 'ยังไม่มีโจทย์ในกลุ่มนี้ กด "เพิ่มโจทย์"', 'msg'));
+  qRows.forEach(q => box.append(qCard(q)));
+}
+$('addBtn').onclick = () => {
+  const pos = qRows.reduce((m, r) => Math.max(m, r.position), 0) + 1;
+  const q = { id: null, team: $('qTeam').value, position: pos, statement: '', correct_answer: null, explanation: '', is_active: true };
+  qRows.push(q);
+  if (qRows.length === 1) $('qList').innerHTML = '';
+  const c = qCard(q); $('qList').append(c); c.querySelector('.st').focus();
+};
+
+function qCard(q) {
+  const n = ++uid, c = el('div', undefined, 'card' + (q.is_active ? '' : ' off'));
+  c.innerHTML = `
+    <div class="qh"><span class="no"></span><span><button data-a="up">↑</button> <button data-a="down">↓</button></span></div>
+    <textarea class="st" rows="3" placeholder="สถานการณ์ที่ให้พนักงานตัดสินว่าถูกหรือผิด"></textarea>
+    <div class="row">
+      <b>เฉลย:</b>
+      <label><input type="radio" name="a${n}" value="1"> ถูก</label>
+      <label><input type="radio" name="a${n}" value="0"> ผิด</label>
+    </div>
+    <textarea class="ex" rows="2" placeholder="หมายเหตุหรือเหตุผลอ้างอิง (เฉพาะหัวหน้า พนักงานไม่เห็น)" style="margin-top:8px"></textarea>
+    <div class="row">
+      <label><input type="checkbox" class="act"> ใช้งานข้อนี้</label>
+      <span class="sp"></span>
+      <button data-a="del" class="del">ลบ</button>
+      <button data-a="save" class="pri">บันทึก</button>
+    </div>`;
+  c.querySelector('.no').textContent = 'ข้อ ' + q.position + (q.id ? '' : ' (ใหม่ ยังไม่บันทึก)');
+  c.querySelector('.st').value = q.statement;
+  c.querySelector('.ex').value = q.explanation || '';
+  c.querySelector('.act').checked = q.is_active;
+  if (q.correct_answer !== null) c.querySelector(`input[value="${q.correct_answer ? 1 : 0}"]`).checked = true;
+  c.onclick = e => {
+    const a = e.target.dataset.a; if (!a) return;
+    if (a === 'save') saveQ(c, q);
+    if (a === 'del') delQ(c, q);
+    if (a === 'up') moveQ(q, -1);
+    if (a === 'down') moveQ(q, 1);
+  };
+  return c;
+}
+async function saveQ(c, q) {
+  const st = c.querySelector('.st').value.trim();
+  const ans = c.querySelector('input[type=radio]:checked');
+  if (!st) return toast('พิมพ์สถานการณ์ก่อนบันทึก', true);
+  if (!ans) return toast('เลือกเฉลย ถูก หรือ ผิด ก่อนบันทึก', true);
+  const payload = { team: q.team, position: q.position, statement: st, correct_answer: ans.value === '1',
+    explanation: c.querySelector('.ex').value.trim() || null, is_active: c.querySelector('.act').checked };
+  const res = q.id
+    ? await sb.from('wc_questions').update(payload).eq('id', q.id).select().single()
+    : await sb.from('wc_questions').insert(payload).select().single();
+  if (res.error) return toast('บันทึกไม่สำเร็จ: ' + res.error.message, true);
+  qRows[qRows.indexOf(q)] = res.data; c.replaceWith(qCard(res.data)); toast('บันทึกแล้ว');
+}
+async function delQ(c, q) {
+  if (!confirm('ลบโจทย์ข้อนี้? (ผลคำตอบเก่ายังเก็บไว้)')) return;
+  if (q.id) {
+    const { error } = await sb.from('wc_questions').delete().eq('id', q.id);
+    if (error) return toast('ลบไม่สำเร็จ: ' + error.message, true);
+  }
+  qRows.splice(qRows.indexOf(q), 1); c.remove(); toast('ลบแล้ว');
+}
+async function moveQ(q, dir) {
+  const o = qRows[qRows.indexOf(q) + dir]; if (!o) return;
+  if (!q.id || !o.id) return toast('บันทึกโจทย์ใหม่ก่อนจึงจะเลื่อนลำดับได้', true);
+  const [a, b] = [q.position, o.position];
+  for (const [id, position] of [[q.id, -1], [o.id, a], [q.id, b]]) {
+    const { error } = await sb.from('wc_questions').update({ position }).eq('id', id);
+    if (error) return toast('เลื่อนไม่สำเร็จ: ' + error.message, true);
+  }
+  loadQ();
+}
+
+// ---------- ผลรายคน ----------
+let attempts = [];
+$('reloadBtn').onclick = loadR;
+$('search').oninput = renderR;
+$('rTeam').onchange = renderR;
+
+async function loadR() {
+  $('rList').innerHTML = ''; $('rList').append(el('div', 'กำลังโหลด...', 'msg'));
+  const { data, error } = await sb.from('wc_attempts').select('*').order('started_at', { ascending: false }).limit(500);
+  if (error) { $('rList').innerHTML = ''; $('rList').append(el('div', 'โหลดไม่สำเร็จ: ' + error.message, 'msg err')); return; }
+  attempts = data; renderR();
+}
+function renderR() {
+  const kw = $('search').value.trim().toLowerCase(), tf = $('rTeam').value;
+  const shown = attempts.filter(a => (!tf || a.team === tf) &&
+    (!kw || (a.employee_name || '').toLowerCase().includes(kw) || (a.employee_group || '').toLowerCase().includes(kw)));
+  const done = shown.filter(a => a.finished_at);
+  const avg = done.length ? (done.reduce((s, a) => s + a.score, 0) / done.length).toFixed(1) : '-';
+  const warns = shown.reduce((s, a) => s + a.warnings, 0);
+  $('count').textContent = 'แสดง ' + shown.length + ' ครั้ง • ทำจบ ' + done.length + ' • คะแนนเฉลี่ย ' + avg + ' • ใบวอร์นิ่งรวม ' + warns;
+  const box = $('rList'); box.innerHTML = '';
+  if (!shown.length) { box.append(el('div', 'ไม่พบข้อมูล', 'msg')); return; }
+  shown.forEach(a => {
+    const d = document.createElement('details'), s = document.createElement('summary');
+    s.append(el('b', a.employee_name));
+    const meta = el('div', undefined, 'mute');
+    meta.textContent = (a.employee_group || '-') + ' • ' + TEAM[a.team] + ' • คะแนน ' + a.score + ' • ' +
+      fmt(a.started_at) + (a.finished_at ? '' : ' • ยังทำไม่จบ');
+    if (a.warnings) meta.append(' ', el('span', 'ใบวอร์นิ่ง ' + a.warnings, 'warn'));
+    s.append(meta); d.append(s);
+    const body = document.createElement('div'); d.append(body);
+    d.addEventListener('toggle', () => { if (d.open && !body.childElementCount) fillAnswers(body, a); });
+    box.append(d);
+  });
+}
+async function fillAnswers(body, a) {
+  body.append(el('div', 'กำลังโหลด...', 'msg'));
+  const { data, error } = await sb.from('wc_answers').select('*').eq('attempt_id', a.id).order('position');
+  body.innerHTML = '';
+  if (error) return body.append(el('div', 'โหลดไม่สำเร็จ: ' + error.message, 'msg err'));
+  if (!data.length) return body.append(el('div', 'ยังไม่มีคำตอบ', 'msg'));
+  data.forEach(r => {
+    const it = el('div', undefined, 'item');
+    it.append(el('div', 'ข้อ ' + r.position + ': ' + r.statement));
+    const res = el('div', undefined, r.is_correct ? 'ok' : 'bad');
+    res.textContent = (r.is_correct ? '✓ ตอบถูก' : '✗ ตอบผิด (ใบวอร์นิ่ง)') + ' • พนักงานตอบ "' + (r.answer ? 'ถูก' : 'ผิด') + '"';
+    it.append(res); body.append(it);
+  });
+}
+
+// ข้อที่ตอบผิดบ่อย (รวมทุกครั้งที่เก็บไว้ สูงสุด 5,000 คำตอบล่าสุด)
+$('weakBtn').onclick = async () => {
+  const w = $('weak');
+  if (!w.classList.contains('hide')) return w.classList.add('hide');
+  w.classList.remove('hide'); w.textContent = 'กำลังคำนวณ...';
+  const { data, error } = await sb.from('wc_answers').select('statement,is_correct')
+    .order('created_at', { ascending: false }).limit(5000);
+  if (error) return w.textContent = 'โหลดไม่สำเร็จ: ' + error.message;
+  const m = new Map();
+  data.forEach(r => { const x = m.get(r.statement) || { t: 0, w: 0 }; x.t++; if (!r.is_correct) x.w++; m.set(r.statement, x); });
+  const top = [...m.entries()].filter(([, x]) => x.w).sort((a, b) => b[1].w / b[1].t - a[1].w / a[1].t || b[1].w - a[1].w).slice(0, 5);
+  w.innerHTML = '';
+  w.append(el('b', 'ข้อที่ตอบผิดบ่อยที่สุด'));
+  if (!top.length) return w.append(el('div', 'ยังไม่มีข้อที่ตอบผิด', 'mute'));
+  top.forEach(([st, x]) => {
+    const it = el('div', undefined, 'item');
+    it.append(el('div', st));
+    it.append(el('div', 'ผิด ' + x.w + ' จาก ' + x.t + ' คน (' + Math.round(x.w / x.t * 100) + '%)', 'bad'));
+    w.append(it);
+  });
+};
+</script>
+</body>
+</html>
